@@ -18,7 +18,7 @@ This project documents the deployment and configuration of a cloud-based **Activ
 
 | Device Name | Role | OS | IP Address | Subnet / VNet |
 | :--- | :--- | :--- | :--- | :--- |
-| **DC01** | Domain Controller / Primary DNS | Windows Server 2022 | `10.0.0.4` | `10.0.0.0/24` |
+| **DC01** | Domain Controller / Primary DNS | Windows Server 2022 | `172.16.0.4` | `172.16.0.0/24` |
 | **CLIENT01** | Member Server / Test Client | Windows Server 2022 | `10.0.0.5` | `10.0.0.0/24` |
 
 ---
@@ -26,14 +26,14 @@ This project documents the deployment and configuration of a cloud-based **Activ
 ## ⚙️ Key Implementation Steps
 
 ### 1. Azure Infrastructure Setup
-* Provisioned an Azure Virtual Network (`VNet-Lab`) with address space `10.0.0.0/16`.
+* Provisioned an Azure Virtual Network (`VNet-Lab`) with address space `51.4.96.238/16`.
 * Deployed two Windows Server 2022 VMs (`DC01` and `CLIENT01`) within the same subnet.
-* Configured a **Static Private IP** (`10.0.0.4`) for `DC01` via the Azure Portal.
-* Updated VNet **Custom DNS Settings** to point to `10.0.0.4` to allow domain name resolution for client VMs.
+* Configured a **Static Private IP** (`172.16.0.4`) for `DC01` via the Azure Portal.
+* Updated VNet **Custom DNS Settings** to point to `172.16.0.0` to allow domain name resolution for client VMs.
 
 ### 2. Active Directory DS & Domain Configuration
 * Promoted `DC01` to a Domain Controller for the new forest `lab.local`.
-* Configured a Reverse Lookup Zone on the DNS Server for the `10.0.0.x` subnet.
+* Configured a Reverse Lookup Zone on the DNS Server for the `172.16.0.x` subnet.
 * Domain-joined `CLIENT01` to `lab.local` and verified network connectivity and Kerberos ticket issuance via `klist`.
 
 ### 3. Automated User & OU Provisioning via PowerShell
