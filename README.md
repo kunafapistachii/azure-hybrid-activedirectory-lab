@@ -1,13 +1,13 @@
 # 🚀 Enterprise Active Directory & Identity Management Lab (Azure)
 
 ## 📌 Executive Summary
-This project documents the deployment and configuration of a cloud-based **Active Directory Domain Services (AD DS)** environment hosted on **Microsoft Azure**. The project demonstrates setting up a Domain Controller, configuring the `lab.local` domain, joining Windows Server client machines to the domain, and automating bulk user provisioning using custom PowerShell scripts.
+This project demonstrates the design, deployment, and automation of a cloud-hosted **Active Directory Domain Services (AD DS)** environment built on **Microsoft Azure**. The lab highlights enterprise identity management, custom Organizational Unit (OU) architecture following multi-site best practices, domain integration of client workstations, and automated bulk user provisioning using PowerShell.
 
 ---
 
 ## 🛠️ Infrastructure & Tech Stack
-* **Cloud Platform:** Microsoft Azure (Virtual Networks, Network Security Groups)
-* **Operating System:** Windows Server 2022 Datacenter (Gen 2 x64)
+* **Cloud Infrastructure:** Microsoft Azure (Virtual Networks, Static IP Allocation, NSGs)
+* **Operating Systems:** Windows Server 2022 Datacenter (Gen 2 x64)
 * **Directory Services:** Active Directory DS, DNS, Group Policy (GPO)
 * **Automation:** PowerShell 5.1 (ActiveDirectory Module)
 * **Domain Name:** `lab.local`
@@ -16,52 +16,89 @@ This project documents the deployment and configuration of a cloud-based **Activ
 
 ## 📐 Network & Lab Topology
 
-| Device Name | Role | OS | IP Address | Subnet / VNet |
+| Device Name | Role | OS | Private IP | Subnet / VNet |
 | :--- | :--- | :--- | :--- | :--- |
-| **DC01** | Domain Controller / Primary DNS | Windows Server 2022 | `172.16.0.4` | `172.16.0.0/24` |
-| **CLIENT01** | Member Server / Test Client | Windows Server 2022 | `10.0.0.5` | `10.0.0.0/24` |
+| **DC01** | Domain Controller / Primary DNS | Windows Server 2022 | `172.16.0.4` | `172.16.0.4/24` |
+| **CLIENT01** | Member Workstation / Client | Windows Server 2022 | `172.16.0.5` | `172.16.0.4/24` |
 
 ---
 
-## ⚙️ Key Implementation Steps
+## 🏛️ Custom Active Directory Architecture (RBAC & OU Design)
 
-### 1. Azure Infrastructure Setup
-* Provisioned an Azure Virtual Network (`VNet-Lab`) with address space `51.4.96.238/16`.
-* Deployed two Windows Server 2022 VMs (`DC01` and `CLIENT01`) within the same subnet.
-* Configured a **Static Private IP** (`172.16.0.4`) for `DC01` via the Azure Portal.
-* Updated VNet **Custom DNS Settings** to point to `172.16.0.0` to allow domain name resolution for client VMs.
+To reflect real-world enterprise standards, a location-based and role-based access control (RBAC) structure was designed using top-level underscores (`_`) for administrative organization:
 
-### 2. Active Directory DS & Domain Configuration
-* Promoted `DC01` to a Domain Controller for the new forest `lab.local`.
-* Configured a Reverse Lookup Zone on the DNS Server for the `172.16.0.x` subnet.
-* Domain-joined `CLIENT01` to `lab.local` and verified network connectivity and Kerberos ticket issuance via `klist`.
+```text
+lab.local
+ ├── _Branches
+ │    └── Jeddah
+ │         ├── Users          <-- Domain Users imported via script
+ │         ├── Workstations   <-- Workstation accounts
+ │         └── Laptops        <-- Mobile devices / Remote assets
+ └── _Groups
+      ├── ITSupport           <-- Administrative / Helpdesk scope
+      ├── Accounting          <-- Departmental access scope
+      └── Helpdesk           <-- Tier-1 Ticket Handlers
+```
+# ⚙️ Key Implementation Steps
 
-### 3. Automated User & OU Provisioning via PowerShell
-Created a deployment script (`Deploy-ADStructure.ps1`) to automate identity infrastructure setup:
-* **Organizational Units (OUs):** `Corporate_Users`, `IT`, `HR`, `Finance`, `Operations`.
-* **Security Groups:** `SG_IT_Admins`, `SG_HR_Staff`, `SG_Finance_Read`, `SG_VPN_Users`.
-* **Bulk User Import:** Automated parsing of `users.csv` to create user objects, place them in targeted OUs, and set initial temporary passwords with forced password change on first logon.
+## 1. Azure Networking & DNS Alignment
 
----
+- Provisioned `DC01` and `CLIENT01` within a shared Azure Virtual Network (`VNet-Lab`).
+- Configured static private IP binding for `DC01` (`10.0.0.4`).
+- Updated Azure VNet Custom DNS Settings to direct all name queries to `10.0.0.4`, enabling proper Kerberos and LDAP resolution.
 
-## 🔍 Troubleshooting & Resolution Log
+## 2. Active Directory DS Promotion & Workstation Join
 
-### Issue 1: Domain Join Failure (`DNS_ERROR_NAME_DOES_NOT_EXIST`)
-* **Symptom:** `CLIENT01` failed to join `lab.local` with an error stating the domain name could not be found.
-* **Root Cause:** `CLIENT01` was still using Azure Default DNS (`168.63.129.16`), preventing SRV record lookups for `_ldap._tcp.dc._msdcs.lab.local`.
-* **Resolution:** 
-  1. Updated the Virtual Network DNS settings in Azure Portal to custom IP `10.0.0.4`.
-  2. Executed `ipconfig /flushdns` and `ipconfig /renew` on `CLIENT01`.
-  3. Verified resolution via `nslookup lab.local`, returning `10.0.0.4`.
+- Promoted `DC01` to a Domain Controller for the `lab.local` forest.
+- Successfully joined `CLIENT01` to `lab.local` after verifying SRV record resolution via `nslookup lab.local`.
+- Moved `CLIENT01` out of the default `CN=Computers` container into its designated Organizational Unit: `OU=Workstations,OU=Jeddah,OU=_Branches,DC=lab,DC=local` for granular GPO management.
 
----
+## 3. Automated Provisioning via PowerShell (`Deploy-ADStructure.ps1`)
 
-## 📜 How to Run the Automation Script
+Designed an idempotent PowerShell script to automate directory deployment:
 
-1. Log into **DC01** as Domain Administrator.
-2. Clone or download this repository to `C:\AD-Lab\`.
-3. Open PowerShell as Administrator.
-4. Execute the script:
-   ```powershell
-   Set-ExecutionPolicy Unrestricted -Scope Process
-   .\Deploy-ADStructure.ps1
+- **OU & Sub-OU Creation:** Provisions `_Branches/Jeddah/(Users, Workstations, Laptops)` and `_Groups`.
+- **Security Group Creation:** Generates RBAC groups (`ITSupport`, `Accounting`, `Helpdesk`).
+- **Bulk User Ingestion:** Parses `users.csv`, automatically creates account objects with populated attributes (Title, Department, UPN), targets destination OUs, assigns temporary credentials, enforces mandatory password changes on first logon, and maps users to corresponding security groups.
+
+# 🔒 Security Policies & Administrative Delegation
+
+## 1. Domain-Wide Password Policy
+
+Enforced strong credential protection across the domain via Group Policy:
+
+- **Minimum Password Length:** 12 Characters.
+- **Password Complexity:** Enabled (Upper/Lowercase, Numbers, Symbols).
+- **Account Lockout Threshold:** 5 Failed Login Attempts.
+- **Lockout Duration:** 15 Minutes (prevents brute-force attack vectors).
+
+## 2. Helpdesk Administrative Delegation (Least Privilege)
+
+To maintain the Principle of Least Privilege (PoLP) without granting full Domain Admin rights:
+
+- Delegated "Reset User Passwords and Force Password Change at Next Logon" permissions explicitly to the `Helpdesk` security group over the `OU=Users,OU=Jeddah,OU=_Branches,DC=lab,DC=local` scope.
+- Verified that Tier-1 Helpdesk staff can maintain user access without elevated domain control.
+
+# 🔍 Verification & Troubleshooting Log
+
+**DNS Resolution Issue (`DNS_ERROR_NAME_DOES_NOT_EXIST`):**
+
+- **Issue:** Client VM failed initial domain join.
+- **Root Cause:** Client retained default Azure internal DNS (`168.63.129.16`).
+- **Resolution:** Updated VNet DNS to point to `10.0.0.4`, executed `ipconfig /flushdns` on `CLIENT01`, and verified lookup via `nslookup lab.local`.
+
+**Domain Authentication Verification:**
+
+- Successfully authenticated on `CLIENT01` using newly created credentials (`lab\ahmad.alghamdi`).
+- Confirmed initial logon forced password reset prompt.
+- Executed `whoami` and `net config workstation` confirming active session under `LAB.LOCAL`.
+
+# 📜 Repository Structure
+ 
+```
+├── Deploy-ADStructure.ps1   # PowerShell automation script for OUs, Groups, and Users
+├── users.csv                # Sample CSV dataset for bulk user ingestion
+├── README.md                # Project documentation
+└── docs/
+    └── images/              # Screenshots (ADUC console, script execution, client logon)
+```
