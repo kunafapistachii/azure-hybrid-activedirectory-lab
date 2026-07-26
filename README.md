@@ -1,7 +1,7 @@
 # 🚀 Enterprise Active Directory & Identity Management Lab (Azure)
 
 ## 📌 Executive Summary
-Proyek ini mendokumentasikan penyiapan infrastruktur **Active Directory Domain Services (AD DS)** berbasis cloud di **Microsoft Azure**. Proyek ini mencakup konfigurasi Domain Controller, pembuatan infrastruktur domain `lab.local`, join domain pada Windows Server client, serta otomatisasi manajemen pengguna (*bulk user provisioning*) menggunakan skrip PowerShell.
+This project documents the deployment and configuration of a cloud-based **Active Directory Domain Services (AD DS)** environment hosted on **Microsoft Azure**. The project demonstrates setting up a Domain Controller, configuring the `lab.local` domain, joining Windows Server client machines to the domain, and automating bulk user provisioning using custom PowerShell scripts.
 
 ---
 
@@ -26,42 +26,42 @@ Proyek ini mendokumentasikan penyiapan infrastruktur **Active Directory Domain S
 ## ⚙️ Key Implementation Steps
 
 ### 1. Azure Infrastructure Setup
-* Buat Virtual Network (`VNet-Lab`) dengan address space `10.0.0.0/16`.
-* Deploy dua VM Windows Server 2022 (DC01 dan CLIENT01) pada subnet yang sama.
-* Konfigurasi **Static Private IP** untuk DC01 di Azure Portal.
-* Ubah **DNS Server Settings** pada VNet ke Custom DNS (`10.0.0.4`) agar CLIENT01 dapat melakukan resolusi nama domain `lab.local`.
+* Provisioned an Azure Virtual Network (`VNet-Lab`) with address space `10.0.0.0/16`.
+* Deployed two Windows Server 2022 VMs (`DC01` and `CLIENT01`) within the same subnet.
+* Configured a **Static Private IP** (`10.0.0.4`) for `DC01` via the Azure Portal.
+* Updated VNet **Custom DNS Settings** to point to `10.0.0.4` to allow domain name resolution for client VMs.
 
-### 2. Active Directory DS Domain Installation
-* Promosi `DC01` menjadi Domain Controller untuk forest baru: `lab.local`.
-* Konfigurasi Reverse Lookup Zone pada DNS Server untuk cakupan jaringan `10.0.0.x`.
-* Lakukan Join Domain pada `CLIENT01` ke `lab.local` dan verifikasi konektivitas jaringan serta tiket Kerberos via `klist`.
+### 2. Active Directory DS & Domain Configuration
+* Promoted `DC01` to a Domain Controller for the new forest `lab.local`.
+* Configured a Reverse Lookup Zone on the DNS Server for the `10.0.0.x` subnet.
+* Domain-joined `CLIENT01` to `lab.local` and verified network connectivity and Kerberos ticket issuance via `klist`.
 
 ### 3. Automated User & OU Provisioning via PowerShell
-Menggunakan skrip khusus (`Deploy-ADStructure.ps1`), infrastruktur berikut berhasil dibuat secara otomatis:
-* **Organizational Units:** `Corporate_Users`, `IT`, `HR`, `Finance`, `Operations`.
+Created a deployment script (`Deploy-ADStructure.ps1`) to automate identity infrastructure setup:
+* **Organizational Units (OUs):** `Corporate_Users`, `IT`, `HR`, `Finance`, `Operations`.
 * **Security Groups:** `SG_IT_Admins`, `SG_HR_Staff`, `SG_Finance_Read`, `SG_VPN_Users`.
-* **Bulk User Import:** Mengimpor data pengguna dari `users.csv` ke dalam OU masing-masing dengan pengaturan *Force Password Change on First Logon*.
+* **Bulk User Import:** Automated parsing of `users.csv` to create user objects, place them in targeted OUs, and set initial temporary passwords with forced password change on first logon.
 
 ---
 
 ## 🔍 Troubleshooting & Resolution Log
 
 ### Issue 1: Domain Join Failure (`DNS_ERROR_NAME_DOES_NOT_EXIST`)
-* **Symptom:** CLIENT01 gagal join ke domain `lab.local` dengan pesan kesalahan nama domain tidak ditemukan.
-* **Root Cause:** CLIENT01 masih menggunakan Azure Default DNS (`168.63.129.16`) sehingga tidak bisa menyelesaikan kueri SRV record `_ldap._tcp.dc._msdcs.lab.local`.
+* **Symptom:** `CLIENT01` failed to join `lab.local` with an error stating the domain name could not be found.
+* **Root Cause:** `CLIENT01` was still using Azure Default DNS (`168.63.129.16`), preventing SRV record lookups for `_ldap._tcp.dc._msdcs.lab.local`.
 * **Resolution:** 
-  1. Mengubah setting DNS pada Virtual Network interface CLIENT01 di Azure Portal menjadi `10.0.0.4`.
-  2. Menjalankan `ipconfig /flushdns` dan `ipconfig /renew` pada CLIENT01.
-  3. Uji resolusi domain via `nslookup lab.local` sampai mengembalikan IP `10.0.0.4`.
+  1. Updated the Virtual Network DNS settings in Azure Portal to custom IP `10.0.0.4`.
+  2. Executed `ipconfig /flushdns` and `ipconfig /renew` on `CLIENT01`.
+  3. Verified resolution via `nslookup lab.local`, returning `10.0.0.4`.
 
 ---
 
 ## 📜 How to Run the Automation Script
 
-1. Login ke **DC01** sebagai Domain Administrator.
-2. Clone atau download repositori ini ke folder `C:\AD-Lab\`.
-3. Buka PowerShell sebagai Administrator.
-4. Jalankan perintah berikut:
+1. Log into **DC01** as Domain Administrator.
+2. Clone or download this repository to `C:\AD-Lab\`.
+3. Open PowerShell as Administrator.
+4. Execute the script:
    ```powershell
    Set-ExecutionPolicy Unrestricted -Scope Process
    .\Deploy-ADStructure.ps1
